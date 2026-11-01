@@ -2,6 +2,7 @@ package com.nectar.vpn.data
 
 import android.content.Context
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,15 +18,21 @@ object Store {
 
     fun init(context: Context) {
         file = File(context.filesDir, "nectar.json")
+        // Merge the saved values over the defaults so that settings added in newer
+        // versions get their default value instead of false/null.
         val loaded = runCatching {
-            if (file.exists()) gson.fromJson(file.readText(), AppData::class.java) else null
+            if (!file.exists()) return@runCatching null
+            val defaults = gson.toJsonTree(AppData()).asJsonObject
+            val saved = JsonParser.parseString(file.readText()).asJsonObject
+            for ((k, v) in saved.entrySet()) if (!v.isJsonNull) defaults.add(k, v)
+            gson.fromJson(defaults, AppData::class.java)
         }.getOrNull()
         _data.value = sanitize(loaded ?: AppData())
     }
 
     /** Gson bypasses Kotlin constructors, so null-check everything that came from disk. */
     @Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
-    private fun sanitize(d: AppData): AppData = AppData(
+    private fun sanitize(d: AppData): AppData = d.copy(
         subscriptions = (d.subscriptions ?: emptyList()).map { s ->
             s.copy(
                 id = s.id ?: "", url = s.url ?: "", title = s.title ?: "",
@@ -36,10 +43,8 @@ object Store {
                 },
             )
         },
-        selectedServerId = d.selectedServerId,
         userAgent = d.userAgent?.takeIf { it.isNotBlank() } ?: AppData.DEFAULT_USER_AGENT,
-        bypassLan = d.bypassLan,
-        ipv6 = d.ipv6,
+        dns = d.dns?.takeIf { it.isNotBlank() } ?: "1.1.1.1",
     )
 
     @Synchronized

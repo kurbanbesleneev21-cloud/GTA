@@ -125,7 +125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ?: if (selectFirst || d.selectedServerId == null || d.selectedServerId !in allIds) updated.servers.firstOrNull()?.id else d.selectedServerId
                     d.copy(subscriptions = subs, selectedServerId = sel)
                 }
-                pingSubscription(updated)
+                if (Store.data.value.pingAfterUpdate) pingSubscription(updated)
             } catch (e: Throwable) {
                 say("Ошибка обновления: ${e.message ?: e.javaClass.simpleName}")
             } finally {
@@ -138,6 +138,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called on app start: refreshes subscriptions whose update interval has passed. */
     fun refreshDue() {
+        if (!Store.data.value.autoUpdate) return
         val now = System.currentTimeMillis()
         Store.data.value.subscriptions
             .filter { !it.isManual && now - it.updatedAt > it.updateHours * 3_600_000L }

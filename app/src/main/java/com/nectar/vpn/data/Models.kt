@@ -36,11 +36,28 @@ data class AppData(
     val subscriptions: List<Subscription> = emptyList(),
     val selectedServerId: String? = null,
     val userAgent: String = DEFAULT_USER_AGENT,
+    /** Local network (192.168.x.x etc.) goes directly, not through the VPN. */
     val bypassLan: Boolean = true,
     val ipv6: Boolean = true,
+    /** DNS server given to the system for the VPN interface. */
+    val dns: String = "1.1.1.1",
+    /** Refresh subscriptions on app start when the update interval has passed. */
+    val autoUpdate: Boolean = true,
+    /** Measure ping of all servers after a subscription update. */
+    val pingAfterUpdate: Boolean = true,
+    val sortByPing: Boolean = false,
+    /** Grayscale country flags (fits the monochrome style). */
+    val monoFlags: Boolean = false,
+    /** Haptic feedback on the connect button. */
+    val haptics: Boolean = true,
 ) {
     companion object {
         /** Panels (Remnawave, Marzban…) return full Xray-JSON configs for this client signature. */
         const val DEFAULT_USER_AGENT = "Happ/3.0.0"
     }
+}
+
+object Links {
+    /** Telegram bot where users buy / renew the subscription. */
+    const val BOT = "https://t.me/NECTARVPN_xbot"
 }

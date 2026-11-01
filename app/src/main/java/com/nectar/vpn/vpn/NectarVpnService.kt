@@ -80,14 +80,13 @@ class NectarVpnService : VpnService() {
             closeTun()
 
             val settings = Store.data.value
-            val config = XrayConfig.forVpn(server.config, MTU)
+            val config = XrayConfig.forVpn(server.config, MTU, settings.bypassLan)
 
             val builder = Builder()
                 .setSession(server.name)
                 .setMtu(MTU)
                 .addAddress("10.10.14.1", 30)
-                .addDnsServer("1.1.1.1")
-                .addDnsServer("8.8.8.8")
+                .addDnsServer(settings.dns)
                 .addRoute("0.0.0.0", 0)
                 .addDisallowedApplication(packageName)
             if (settings.ipv6) {

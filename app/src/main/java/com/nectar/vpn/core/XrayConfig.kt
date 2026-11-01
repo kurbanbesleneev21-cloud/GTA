@@ -17,7 +17,7 @@ object XrayConfig {
     private val SERVICE_PROTOCOLS = setOf("freedom", "blackhole", "dns", "loopback")
 
     /** Wraps a single outbound (from a share link) into a complete config. */
-    fun fromOutbound(outbound: JsonObject, bypassLan: Boolean = true): String {
+    fun fromOutbound(outbound: JsonObject, bypassLan: Boolean = false): String {
         val root = JsonObject()
         root.add("log", JsonObject().apply { addProperty("loglevel", "warning") })
         root.add("dns", JsonObject().apply {
@@ -81,7 +81,7 @@ object XrayConfig {
      * VpnService file descriptor. If the config already has a socks inbound we turn it into the
      * tun inbound (keeping its tag) so that routing rules bound to it keep working.
      */
-    fun forVpn(config: String, mtu: Int): String {
+    fun forVpn(config: String, mtu: Int, bypassLan: Boolean): String {
         val cfg = parse(config) ?: error("Некорректная конфигурация сервера")
         val inbounds = cfg.getAsJsonArray("inbounds") ?: JsonArray().also { cfg.add("inbounds", it) }
         val kept = JsonArray()
@@ -110,12 +110,35 @@ object XrayConfig {
             add("sniffing", tunSniffing ?: sniffing())
         })
         cfg.add("inbounds", kept)
+        if (bypassLan) addLanBypass(cfg)
         if (!cfg.has("log")) cfg.add("log", JsonObject())
         cfg.getAsJsonObject("log").apply {
             addProperty("loglevel", "warning")
             remove("access"); remove("error")
         }
         return gson.toJson(cfg)
+    }
+
+    /** Puts a "private networks -> direct" rule in front of all routing rules. */
+    private fun addLanBypass(cfg: JsonObject) {
+        val outs = cfg.getAsJsonArray("outbounds") ?: return
+        var directTag = outs.firstOrNull {
+            it.isJsonObject && it.asJsonObject.get("protocol")?.asString == "freedom" && it.asJsonObject.has("tag")
+        }?.asJsonObject?.get("tag")?.asString
+        if (directTag == null) {
+            directTag = "direct-lan"
+            outs.add(JsonObject().apply { addProperty("tag", directTag); addProperty("protocol", "freedom") })
+        }
+        val routing = cfg.getAsJsonObject("routing") ?: JsonObject().also { cfg.add("routing", it) }
+        val rules = routing.getAsJsonArray("rules") ?: JsonArray()
+        val newRules = JsonArray()
+        newRules.add(JsonObject().apply {
+            addProperty("type", "field")
+            add("ip", JsonArray().apply { PRIVATE_CIDRS.forEach { add(it) } })
+            addProperty("outboundTag", directTag)
+        })
+        rules.forEach { newRules.add(it) }
+        routing.add("rules", newRules)
     }
 
     /** Config for an in-process delay test: no inbounds at all. */

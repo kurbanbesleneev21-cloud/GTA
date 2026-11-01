@@ -37,6 +37,27 @@ object Format {
         return letters.take(2).uppercase().ifEmpty { "•" }
     }
 
+    /**
+     * Flag emoji for a server: taken from the name (🇮🇹 Италия) or built from a recognised
+     * country name. Returns null when the country is unknown.
+     */
+    fun flag(name: String): String? {
+        val cps = name.codePoints().toArray()
+        for (i in 0 until cps.size - 1) {
+            if (cps[i] in 0x1F1E6..0x1F1FF && cps[i + 1] in 0x1F1E6..0x1F1FF) {
+                return String(Character.toChars(cps[i])) + String(Character.toChars(cps[i + 1]))
+            }
+        }
+        val lower = name.lowercase()
+        val code = COUNTRIES.entries.firstOrNull { lower.contains(it.key) }?.value ?: return null
+        return code.uppercase().map { c -> String(Character.toChars(0x1F1E6 + (c - 'A'))) }.joinToString("")
+    }
+
+    fun isAuto(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.contains("авто") || lower.contains("auto") || lower.contains("баланс") || lower.contains("best")
+    }
+
     /** Removes emoji (flags, pictographs) from a server name. */
     fun cleanName(name: String): String {
         val sb = StringBuilder()
