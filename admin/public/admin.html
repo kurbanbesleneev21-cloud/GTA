@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nectar Control</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#000; --s:#0b0b0b; --r:#141414; --l:#262626; --ls:#3a3a3a; --m:#6e6e6e; --soft:#a8a8a8; --w:#fff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--w); font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:rgba(0,0,0,.85); backdrop-filter:blur(8px); border-bottom:1px solid var(--l);
+           display:flex; align-items:center; gap:12px; padding:14px 16px; }
+  .logo { font-weight:900; letter-spacing:6px; font-size:18px; }
+  .logo small { display:block; font-size:10px; letter-spacing:4px; color:var(--m); font-weight:500; }
+  .spacer { flex:1; }
+  main { max-width:880px; margin:0 auto; padding:16px 16px 120px; }
+  h2 { font-size:12px; letter-spacing:3px; color:var(--m); font-weight:600; margin:28px 4px 10px; }
+  .card { background:var(--s); border:1px solid var(--l); border-radius:18px; padding:16px; margin-bottom:12px; animation:up .35s ease both; }
+  @keyframes up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  label { display:block; font-size:13px; color:var(--soft); margin:10px 0 6px; }
+  input[type=text], input[type=number], input[type=password], textarea, select {
+    width:100%; background:#000; color:var(--w); border:1px solid var(--ls); border-radius:12px; padding:11px 12px; font:inherit; outline:none; }
+  input:focus, textarea:focus { border-color:var(--w); }
+  textarea { min-height:80px; resize:vertical; }
+  textarea.code { font-family:ui-monospace,Menlo,monospace; font-size:12px; min-height:260px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:640px) { .row { grid-template-columns:1fr; } }
+  .switch { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; cursor:pointer; }
+  .switch .t b { display:block; font-weight:500; }
+  .switch .t span { font-size:12px; color:var(--m); }
+  .tg { position:relative; width:48px; height:28px; flex:none; }
+  .tg input { opacity:0; width:0; height:0; }
+  .tg i { position:absolute; inset:0; border:1.5px solid var(--ls); border-radius:20px; transition:.25s; }
+  .tg i:before { content:""; position:absolute; width:20px; height:20px; left:3px; top:2.5px; background:var(--m); border-radius:50%; transition:.25s; }
+  .tg input:checked + i { background:var(--w); border-color:var(--w); }
+  .tg input:checked + i:before { transform:translateX(19px); background:#000; }
+  button { font:inherit; cursor:pointer; border-radius:14px; padding:11px 18px; border:1px solid var(--ls); background:transparent; color:var(--w); transition:transform .12s, background .2s; }
+  button:active { transform:scale(.96); }
+  button.primary { background:var(--w); color:#000; border-color:var(--w); font-weight:700; }
+  button.danger { border-color:var(--w); }
+  .list-item { display:flex; gap:8px; margin-bottom:8px; }
+  .list-item input { flex:1; }
+  .muted { color:var(--m); font-size:12px; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(80px); background:var(--w); color:#000; padding:12px 18px;
+           border-radius:14px; font-weight:600; transition:.3s; z-index:20; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  #login { max-width:380px; margin:18vh auto; padding:0 16px; text-align:center; }
+  #login .logo { font-size:28px; margin-bottom:24px; }
+  .savebar { position:fixed; left:0; right:0; bottom:0; padding:12px 16px; background:rgba(0,0,0,.9); border-top:1px solid var(--l); display:flex; gap:10px; justify-content:center; }
+  .pill { display:inline-block; padding:3px 10px; border:1px solid var(--ls); border-radius:20px; font-size:12px; color:var(--soft); }
+  .status-on { background:var(--w); color:#000; border-color:var(--w); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="logo">NECTAR<small>C O N T R O L</small></div>
+  <input id="pw" type="password" placeholder="Пароль администратора" autocomplete="current-password">
+  <div style="height:12px"></div>
+  <button class="primary" style="width:100%" onclick="login()">Войти</button>
+  <p class="muted" id="loginErr"></p>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="logo">NECTAR<small>C O N T R O L</small></div>
+    <div class="spacer"></div>
+    <span class="pill" id="state">—</span>
+    <button onclick="logout()">Выйти</button>
+  </header>
+  <main>
+    <h2>БЫСТРЫЕ ДЕЙСТВИЯ</h2>
+    <div class="card" style="display:flex; flex-wrap:wrap; gap:10px">
+      <button onclick="quick('maint', true)">🛠 Включить тех. работы</button>
+      <button onclick="quick('maint', false)">✅ Выключить тех. работы</button>
+      <button onclick="quick('ann', false)">Убрать объявление</button>
+      <button onclick="quick('popup', false)">Отменить разовое сообщение</button>
+    </div>
+
+    <h2>ТЕХНИЧЕСКИЕ РАБОТЫ</h2>
+    <div class="card">
+      <div class="switch" onclick="tgl(event,'maintenance.enabled')"><div class="t"><b>Тех. работы</b><span>Подключение в приложении будет заблокировано с сообщением</span></div><label class="tg"><input type="checkbox" data-k="maintenance.enabled"><i></i></label></div>
+      <label>Сообщение</label><textarea data-k="maintenance.text"></textarea>
+    </div>
+
+    <h2>ОБЪЯВЛЕНИЕ НА ГЛАВНОМ ЭКРАНЕ</h2>
+    <div class="card">
+      <div class="switch" onclick="tgl(event,'announcement.enabled')"><div class="t"><b>Показывать объявление</b><span>Баннер под кнопкой подключения</span></div><label class="tg"><input type="checkbox" data-k="announcement.enabled"><i></i></label></div>
+      <label>Заголовок</label><input type="text" data-k="announcement.title">
+      <label>Текст</label><textarea data-k="announcement.text"></textarea>
+      <div class="row">
+        <div><label>Ссылка кнопки</label><input type="text" data-k="announcement.url" placeholder="https://"></div>
+        <div><label>Текст кнопки</label><input type="text" data-k="announcement.buttonText" placeholder="Подробнее"></div>
+      </div>
+    </div>
+
+    <h2>РАЗОВОЕ СООБЩЕНИЕ ВСЕМ</h2>
+    <div class="card">
+      <p class="muted">Покажется каждому пользователю один раз при открытии приложения.</p>
+      <label>Заголовок</label><input type="text" data-k="popup.title">
+      <label>Текст</label><textarea data-k="popup.text"></textarea>
+      <div class="row">
+        <div><label>Ссылка кнопки</label><input type="text" data-k="popup.url" placeholder="https://"></div>
+        <div><label>Текст кнопки</label><input type="text" data-k="popup.buttonText"></div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="primary" onclick="sendPopup()">Отправить всем</button>
+    </div>
+
+    <h2>ОБНОВЛЕНИЯ ПРИЛОЖЕНИЯ</h2>
+    <div class="card">
+      <div class="row">
+        <div><label>Последняя версия (versionCode)</label><input type="number" data-k="update.latestVersionCode" data-num></div>
+        <div><label>Минимальная версия — ниже не пустит</label><input type="number" data-k="update.minVersionCode" data-num></div>
+      </div>
+      <label>Ссылка на скачивание APK</label><input type="text" data-k="update.url" placeholder="https://">
+      <label>Что нового</label><textarea data-k="update.text"></textarea>
+    </div>
+
+    <h2>ССЫЛКИ</h2>
+    <div class="card">
+      <div class="row">
+        <div><label>Бот (кнопка «Получить подписку»)</label><input type="text" data-k="links.bot"></div>
+        <div><label>Поддержка</label><input type="text" data-k="links.support"></div>
+        <div><label>Канал</label><input type="text" data-k="links.channel"></div>
+        <div><label>Сайт</label><input type="text" data-k="links.site"></div>
+        <div><label>Инструкция для iPhone</label><input type="text" data-k="links.iphone"></div>
+      </div>
+    </div>
+
+    <h2>КНОПКИ НА ГЛАВНОМ ЭКРАНЕ</h2>
+    <div class="card">
+      <div id="buttons"></div>
+      <button onclick="addButton()">+ Добавить кнопку</button>
+    </div>
+
+    <h2>СЕРВЕРЫ</h2>
+    <div class="card">
+      <label>Скрыть серверы, в названии которых есть (по одному в строке)</label><textarea data-k="servers.hide" data-lines></textarea>
+      <label>Закрепить сверху (по одному в строке)</label><textarea data-k="servers.pin" data-lines></textarea>
+      <label>Переименовать (строка: Старое = Новое)</label><textarea id="rename"></textarea>
+      <label>Дополнительные серверы для всех (ключи vless://, hysteria2://… по одному в строке)</label><textarea class="code" style="min-height:110px" data-k="extraKeys" data-lines></textarea>
+    </div>
+
+    <h2>ФУНКЦИИ ПРИЛОЖЕНИЯ</h2>
+    <div class="card">
+      <div class="switch" onclick="tgl(event,'features.autoVpn')"><div class="t"><b>Авто-VPN по приложениям</b><span>Разрешить пользователям</span></div><label class="tg"><input type="checkbox" data-k="features.autoVpn"><i></i></label></div>
+      <div class="switch" onclick="tgl(event,'features.splitTunnel')"><div class="t"><b>Раздельное туннелирование</b><span>Выбор приложений через VPN</span></div><label class="tg"><input type="checkbox" data-k="features.splitTunnel"><i></i></label></div>
+      <div class="switch" onclick="tgl(event,'features.addManual')"><div class="t"><b>Добавление своих ссылок и ключей</b><span>Кнопка «+»</span></div><label class="tg"><input type="checkbox" data-k="features.addManual"><i></i></label></div>
+      <div class="switch" onclick="tgl(event,'features.customUserAgent')"><div class="t"><b>Смена User-Agent</b><span>Поле в настройках</span></div><label class="tg"><input type="checkbox" data-k="features.customUserAgent"><i></i></label></div>
+      <div class="row">
+        <div><label>User-Agent для подписки (пусто — по умолчанию)</label><input type="text" data-k="userAgent"></div>
+        <div><label>URL проверки пинга (пусто — по умолчанию)</label><input type="text" data-k="testUrl"></div>
+      </div>
+    </div>
+
+    <h2>НАСТРОЙКИ ПО УМОЛЧАНИЮ</h2>
+    <div class="card">
+      <p class="muted">Ключи: dns, ipv6, bypassLan, autoUpdate, pingAfterUpdate, sortByPing, monoFlags, haptics, autoReconnect, autoSwitch, reconnectOnNetworkChange, splitMode.</p>
+      <textarea class="code" id="defaults" style="min-height:120px"></textarea>
+      <div class="switch" onclick="tgl(event,'forceDefaults')"><div class="t"><b>Применять принудительно</b><span>Иначе — только при первом запуске</span></div><label class="tg"><input type="checkbox" data-k="forceDefaults"><i></i></label></div>
+    </div>
+
+    <h2>ПОДКЛЮЧЕНИЕ ИЗ ОСНОВНОГО БОТА</h2>
+    <div class="card">
+      <p class="muted">Ссылка-кнопка «Открыть в Nectar VPN»: подставьте ссылку на подписку пользователя.</p>
+      <input type="text" id="subLink" placeholder="https://ваша-ссылка-на-подписку">
+      <div style="height:10px"></div>
+      <button onclick="makeLink()">Сгенерировать</button>
+      <p class="muted" id="linkOut" style="word-break:break-all"></p>
+      <p class="muted">Шаблон для бота: <code id="tpl"></code></p>
+    </div>
+
+    <h2>ВЕСЬ КОНФИГ (JSON)</h2>
+    <div class="card">
+      <textarea class="code" id="raw"></textarea>
+      <div style="height:10px"></div>
+      <button onclick="applyRaw()">Применить JSON</button>
+    </div>
+  </main>
+  <div class="savebar"><button class="primary" style="min-width:220px" onclick="save()">Сохранить</button><button onclick="load()">Отменить</button></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let cfg = null;
+let pw = sessionStorage.getItem("nectar_pw") || "";
+
+const $ = (s) => document.querySelector(s);
+const get = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
+const set = (o, p, v) => { const ks = p.split("."); let a = o; ks.slice(0, -1).forEach((k) => { a[k] = a[k] ?? {}; a = a[k]; }); a[ks.at(-1)] = v; };
+
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); }
+
+async function api(method, body) {
+  const r = await fetch("/api/admin", { method, headers: { "Content-Type": "application/json", "x-admin-password": pw }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+async function login() {
+  pw = $("#pw").value;
+  try { await load(); sessionStorage.setItem("nectar_pw", pw); }
+  catch (e) { $("#loginErr").textContent = "Ошибка: " + e.message; }
+}
+function logout() { sessionStorage.removeItem("nectar_pw"); location.reload(); }
+
+async function load() {
+  cfg = await api("GET");
+  $("#login").hidden = true; $("#app").hidden = false;
+  render();
+}
+
+function render() {
+  document.querySelectorAll("[data-k]").forEach((el) => {
+    const v = get(cfg, el.dataset.k);
+    if (el.type === "checkbox") el.checked = !!v;
+    else if (el.hasAttribute("data-lines")) el.value = (v || []).join("\n");
+    else el.value = v ?? "";
+  });
+  $("#rename").value = Object.entries(cfg.servers.rename || {}).map(([a, b]) => `${a} = ${b}`).join("\n");
+  $("#defaults").value = JSON.stringify(cfg.defaults || {}, null, 2);
+  renderButtons();
+  $("#raw").value = JSON.stringify(cfg, null, 2);
+  const st = $("#state");
+  st.textContent = cfg.maintenance.enabled ? "ТЕХ. РАБОТЫ" : "РАБОТАЕТ";
+  st.classList.toggle("status-on", !cfg.maintenance.enabled);
+  $("#tpl").textContent = location.origin + "/open/{SUBSCRIPTION_URL}";
+}
+
+function renderButtons() {
+  const box = $("#buttons"); box.innerHTML = "";
+  (cfg.buttons || []).forEach((b, i) => {
+    const d = document.createElement("div"); d.className = "list-item";
+    d.innerHTML = `<input type="text" placeholder="Название" value="${(b.title || "").replace(/"/g, "&quot;")}"><input type="text" placeholder="https://" value="${(b.url || "").replace(/"/g, "&quot;")}"><button>✕</button>`;
+    const [t, u, x] = d.children;
+    t.oninput = () => (cfg.buttons[i].title = t.value);
+    u.oninput = () => (cfg.buttons[i].url = u.value);
+    x.onclick = () => { cfg.buttons.splice(i, 1); renderButtons(); };
+    box.appendChild(d);
+  });
+}
+function addButton() { cfg.buttons.push({ title: "", url: "" }); renderButtons(); }
+
+function tgl(e, k) { if (!e.target.closest(".tg")) { const cb = document.querySelector(`[data-k="${k}"]`); cb.checked = !cb.checked; } }
+
+function collect() {
+  document.querySelectorAll("[data-k]").forEach((el) => {
+    const k = el.dataset.k;
+    if (el.type === "checkbox") set(cfg, k, el.checked);
+    else if (el.hasAttribute("data-lines")) set(cfg, k, el.value.split("\n").map((s) => s.trim()).filter(Boolean));
+    else if (el.hasAttribute("data-num")) set(cfg, k, parseInt(el.value || "0", 10) || 0);
+    else set(cfg, k, el.value);
+  });
+  const rn = {};
+  $("#rename").value.split("\n").forEach((l) => { const [a, b] = l.split("=").map((s) => s && s.trim()); if (a && b) rn[a] = b; });
+  cfg.servers.rename = rn;
+  try { cfg.defaults = JSON.parse($("#defaults").value || "{}"); } catch { throw new Error("Ошибка в JSON настроек по умолчанию"); }
+  cfg.buttons = (cfg.buttons || []).filter((b) => b.title && b.url);
+}
+
+async function save() {
+  try { collect(); cfg = await api("POST", cfg); render(); toast("Сохранено — приложения получат изменения в течение минуты"); }
+  catch (e) { toast("Ошибка: " + e.message); }
+}
+async function quick(what, on) {
+  if (what === "maint") cfg.maintenance.enabled = on;
+  if (what === "ann") cfg.announcement.enabled = false;
+  if (what === "popup") cfg.popup = { id: "", title: "", text: "", url: "", buttonText: "" };
+  render(); await save();
+}
+async function sendPopup() {
+  collect(); if (!cfg.popup.text) return toast("Введите текст");
+  cfg.popup.id = String(Date.now()); await save();
+}
+function applyRaw() {
+  try { cfg = JSON.parse($("#raw").value); render(); toast("JSON применён — нажмите «Сохранить»"); }
+  catch (e) { toast("Ошибка JSON: " + e.message); }
+}
+function makeLink() {
+  const u = $("#subLink").value.trim();
+  if (!/^https?:\/\//.test(u)) return toast("Нужна ссылка https://…");
+  $("#linkOut").textContent = location.origin + "/open/" + encodeURIComponent(u);
+}
+
+$("#pw").addEventListener("keydown", (e) => e.key === "Enter" && login());
+if (pw) load().catch(() => { sessionStorage.removeItem("nectar_pw"); });
+</script>
+</body>
+</html>

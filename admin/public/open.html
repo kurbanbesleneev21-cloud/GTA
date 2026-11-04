@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Открыть в Nectar VPN</title>
+<style>
+  :root { --l:#262626; --m:#6e6e6e; --soft:#a8a8a8; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:#000; color:#fff; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .box { width:100%; max-width:420px; text-align:center; animation:up .5s ease both; }
+  @keyframes up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  .ring { width:120px; height:120px; margin:0 auto 26px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; position:relative; }
+  .ring:before, .ring:after { content:""; position:absolute; inset:-2px; border-radius:50%; border:1px solid #fff; animation:pulse 2.4s linear infinite; }
+  .ring:after { animation-delay:1.2s; }
+  @keyframes pulse { from { transform:scale(1); opacity:.5; } to { transform:scale(1.8); opacity:0; } }
+  .logo { font-weight:900; letter-spacing:8px; font-size:24px; }
+  .logo small { display:block; font-size:10px; letter-spacing:4px; color:var(--m); font-weight:500; }
+  p { color:var(--soft); }
+  a.btn, button { display:block; width:100%; margin:10px 0; padding:15px; border-radius:16px; font:inherit; font-weight:700; text-decoration:none; cursor:pointer; }
+  .primary { background:#fff; color:#000; border:1px solid #fff; }
+  .ghost { background:transparent; color:#fff; border:1px solid #3a3a3a; }
+  code { display:block; margin-top:18px; padding:12px; border:1px solid var(--l); border-radius:12px; color:var(--m); font-size:11px; word-break:break-all; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="ring"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></div>
+  <div class="logo">NECTAR<small>V P N</small></div>
+  <p>Нажмите кнопку — подписка добавится в приложение Nectar VPN автоматически.</p>
+  <a class="btn primary" id="open" href="#">Открыть в Nectar VPN</a>
+  <a class="btn ghost" id="download" href="https://github.com/kurbanbesleneev21-cloud/GTA/releases/latest">Скачать приложение для Android</a>
+  <button class="ghost" id="copy">Скопировать ссылку подписки</button>
+  <a class="btn ghost" id="iphone" href="#" hidden>Инструкция для iPhone</a>
+  <code id="sub"></code>
+</div>
+<script>
+  const raw = location.pathname.replace(/^\/open\/?/, "");
+  const sub = decodeURIComponent(raw || new URLSearchParams(location.search).get("url") || "");
+  const deep = "nectarvpn://add/" + sub;
+  document.getElementById("sub").textContent = sub || "Ссылка не передана";
+  document.getElementById("open").href = deep;
+  document.getElementById("copy").onclick = async (e) => {
+    try { await navigator.clipboard.writeText(sub); e.target.textContent = "Скопировано ✓"; } catch { prompt("Скопируйте ссылку:", sub); }
+  };
+  const isAndroid = /android/i.test(navigator.userAgent);
+  fetch("/api/config").then((r) => r.json()).then((c) => {
+    if (c.update && c.update.url) document.getElementById("download").href = c.update.url;
+    if (c.links && c.links.iphone) { const a = document.getElementById("iphone"); a.href = c.links.iphone; a.hidden = false; }
+  }).catch(() => {});
+  if (sub && isAndroid) setTimeout(() => { location.href = deep; }, 400);
+</script>
+</body>
+</html>
