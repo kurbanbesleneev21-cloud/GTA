@@ -50,10 +50,31 @@ data class AppData(
     val monoFlags: Boolean = false,
     /** Haptic feedback on the connect button. */
     val haptics: Boolean = true,
+
+    // --- split tunneling -------------------------------------------------
+    /** "all" = every app through VPN, "only" = only [splitApps], "except" = all but [splitApps]. */
+    val splitMode: String = SPLIT_ALL,
+    val splitApps: List<String> = emptyList(),
+
+    // --- auto VPN by app -------------------------------------------------
+    /** Turn VPN on when one of [autoApps] is opened and off when the user leaves it. */
+    val autoVpn: Boolean = false,
+    val autoApps: List<String> = emptyList(),
+
+    // --- stability ---------------------------------------------------------
+    /** Restart the connection when the server stops answering. */
+    val autoReconnect: Boolean = true,
+    /** If restarting does not help, switch to the fastest working server. */
+    val autoSwitch: Boolean = true,
+    /** Restart the core when the network changes (Wi-Fi <-> mobile). */
+    val reconnectOnNetworkChange: Boolean = true,
 ) {
     companion object {
         /** Panels (Remnawave, Marzban…) return full Xray-JSON configs for this client signature. */
         const val DEFAULT_USER_AGENT = "Happ/3.0.0"
+        const val SPLIT_ALL = "all"
+        const val SPLIT_ONLY = "only"
+        const val SPLIT_EXCEPT = "except"
     }
 }
 

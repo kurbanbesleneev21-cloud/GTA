@@ -66,10 +66,23 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onChange: ((AppData) -> AppData) -> Unit,
     onRefreshAll: () -> Unit,
+    onPickFastest: () -> Unit = {},
+    onAutoVpn: (Boolean) -> Unit = {},
+    onConnectionSettingsChanged: () -> Unit = {},
 ) {
     val context = LocalContext.current
     BackHandler(onBack = onBack)
     var ua by remember { mutableStateOf(data.userAgent) }
+    var picker by remember { mutableStateOf<String?>(null) } // "split" | "auto"
+    var hasUsage by remember { mutableStateOf(com.nectar.vpn.vpn.AppUsage.hasPermission(context)) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        hasUsage = com.nectar.vpn.vpn.AppUsage.hasPermission(context)
+        onPauseOrDispose {}
+    }
+    fun changeConnection(block: (AppData) -> AppData) {
+        onChange(block)
+        onConnectionSettingsChanged()
+    }
     val coreVersion = remember { runCatching { XrayCore.version() }.getOrDefault("?") }
 
     fun saveUa() = onChange { it.copy(userAgent = ua.trim().ifBlank { AppData.DEFAULT_USER_AGENT }) }
@@ -127,9 +140,9 @@ fun SettingsScreen(
             item {
                 Appear(2) {
                     Group {
-                        ToggleRow("Обход локальной сети", "Роутер, принтер и т.п. — напрямую", data.bypassLan) { v -> onChange { it.copy(bypassLan = v) } }
+                        ToggleRow("Обход локальной сети", "Роутер, принтер и т.п. — напрямую", data.bypassLan) { v -> changeConnection { it.copy(bypassLan = v) } }
                         Divider()
-                        ToggleRow("IPv6 через VPN", "Отключите, если сайты открываются медленно", data.ipv6) { v -> onChange { it.copy(ipv6 = v) } }
+                        ToggleRow("IPv6 через VPN", "Отключите, если сайты открываются медленно", data.ipv6) { v -> changeConnection { it.copy(ipv6 = v) } }
                         Divider()
                         Text(
                             "DNS-сервер",
@@ -137,7 +150,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp),
                         )
                         DNS_OPTIONS.forEach { (ip, name) ->
-                            ChoiceRow(name, ip, data.dns == ip) { onChange { it.copy(dns = ip) } }
+                            ChoiceRow(name, ip, data.dns == ip) { changeConnection { it.copy(dns = ip) } }
                         }
                         Spacer(Modifier.height(6.dp))
                         Divider()
@@ -148,7 +161,61 @@ fun SettingsScreen(
                 }
             }
 
-            item { Section("ПОДПИСКИ", 3) }
+            item { Section("СКОРОСТЬ И СТАБИЛЬНОСТЬ", 3) }
+            item {
+                Appear(4) {
+                    Group {
+                        ToggleRow("Автоперезапуск", "Перезапускать соединение, если сервер не отвечает", data.autoReconnect) { v -> onChange { it.copy(autoReconnect = v) } }
+                        Divider()
+                        ToggleRow("Автосмена сервера", "Если перезапуск не помог — переключить на самый быстрый", data.autoSwitch) { v -> onChange { it.copy(autoSwitch = v) } }
+                        Divider()
+                        ToggleRow("При смене сети", "Мгновенно переподключаться при переходе Wi-Fi ↔ мобильная", data.reconnectOnNetworkChange) { v -> onChange { it.copy(reconnectOnNetworkChange = v) } }
+                        Divider()
+                        Column(Modifier.padding(16.dp)) {
+                            ShineButton("Найти самый быстрый сервер", { onPickFastest(); onBack() }, Modifier.fillMaxWidth(), shine = false)
+                        }
+                    }
+                }
+            }
+
+            item { Section("ПРИЛОЖЕНИЯ", 5) }
+            item {
+                Appear(6) {
+                    Group {
+                        Text(
+                            "Раздельное туннелирование",
+                            color = Mono.White, fontSize = 15.sp,
+                            modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp),
+                        )
+                        ChoiceRow("Все приложения через VPN", "", data.splitMode == AppData.SPLIT_ALL) { changeConnection { it.copy(splitMode = AppData.SPLIT_ALL) } }
+                        ChoiceRow("Только выбранные", "", data.splitMode == AppData.SPLIT_ONLY) { changeConnection { it.copy(splitMode = AppData.SPLIT_ONLY) } }
+                        ChoiceRow("Все, кроме выбранных", "", data.splitMode == AppData.SPLIT_EXCEPT) { changeConnection { it.copy(splitMode = AppData.SPLIT_EXCEPT) } }
+                        if (data.splitMode != AppData.SPLIT_ALL) {
+                            LinkRow("Выбрать приложения", "Выбрано: ${data.splitApps.size}") { picker = "split" }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Divider()
+                        ToggleRow(
+                            "Авто-VPN по приложениям",
+                            "VPN включится при входе в выбранное приложение и выключится при выходе",
+                            data.autoVpn,
+                        ) { v -> onAutoVpn(v) }
+                        if (data.autoVpn) {
+                            LinkRow("Приложения для авто-VPN", "Выбрано: ${data.autoApps.size}") { picker = "auto" }
+                            if (!hasUsage) {
+                                Divider()
+                                LinkRow("⚠ Дайте доступ к статистике", "Нужно, чтобы видеть, какое приложение открыто") {
+                                    runCatching {
+                                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Section("ПОДПИСКИ", 7) }
             item {
                 Appear(4) {
                     Group {
@@ -176,7 +243,7 @@ fun SettingsScreen(
                 }
             }
 
-            item { Section("ВНЕШНИЙ ВИД", 5) }
+            item { Section("ВНЕШНИЙ ВИД", 9) }
             item {
                 Appear(6) {
                     Group {
@@ -189,7 +256,7 @@ fun SettingsScreen(
                 }
             }
 
-            item { Section("О ПРИЛОЖЕНИИ", 7) }
+            item { Section("О ПРИЛОЖЕНИИ", 11) }
             item {
                 Appear(8) {
                     Group {
@@ -200,6 +267,27 @@ fun SettingsScreen(
                         InfoRow("Ядро Xray", coreVersion)
                     }
                 }
+            }
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = picker != null,
+            enter = androidx.compose.animation.slideInHorizontally { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutHorizontally { it } + androidx.compose.animation.fadeOut(),
+        ) {
+            val kind = picker
+            if (kind == "split") {
+                AppPickerScreen(
+                    title = "Раздельное туннелирование",
+                    hint = if (data.splitMode == AppData.SPLIT_ONLY) "Через VPN пойдут только отмеченные приложения"
+                    else "Отмеченные приложения будут работать без VPN",
+                    initial = data.splitApps,
+                ) { list -> picker = null; changeConnection { it.copy(splitApps = list) } }
+            } else if (kind == "auto") {
+                AppPickerScreen(
+                    title = "Авто-VPN",
+                    hint = "VPN включится сам, когда вы откроете одно из отмеченных приложений, и выключится, когда выйдете",
+                    initial = data.autoApps,
+                ) { list -> picker = null; onChange { it.copy(autoApps = list) }; onAutoVpn(true) }
             }
         }
     }

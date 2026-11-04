@@ -21,8 +21,12 @@ class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
 
+    private var afterVpnPermission: (() -> Unit)? = null
+
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == RESULT_OK) vm.connect()
+        val then = afterVpnPermission
+        afterVpnPermission = null
+        if (it.resultCode == RESULT_OK) then?.invoke()
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -32,7 +36,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             NectarTheme {
-                MainScreen(vm = vm, onConnect = ::requestConnect)
+                MainScreen(vm = vm, onConnect = ::requestConnect, onPrepareVpn = ::withVpnPermission)
             }
         }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -43,6 +47,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             handleIntent(intent)
             vm.refreshDue()
+            if (VpnService.prepare(this) == null) vm.ensureStandby()
         }
     }
 
@@ -57,8 +62,14 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_CONNECT, false)) requestConnect()
     }
 
-    private fun requestConnect() {
+    private fun requestConnect() = withVpnPermission { vm.connect() }
+
+    /** Runs [then] once the VPN permission is granted (asks the user if needed). */
+    private fun withVpnPermission(then: () -> Unit) {
         val prepare = VpnService.prepare(this)
-        if (prepare != null) vpnPermission.launch(prepare) else vm.connect()
+        if (prepare != null) {
+            afterVpnPermission = then
+            vpnPermission.launch(prepare)
+        } else then()
     }
 }

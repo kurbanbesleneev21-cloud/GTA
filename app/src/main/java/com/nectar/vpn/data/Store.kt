@@ -3,6 +3,8 @@ package com.nectar.vpn.data
 import android.content.Context
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +47,9 @@ object Store {
         },
         userAgent = d.userAgent?.takeIf { it.isNotBlank() } ?: AppData.DEFAULT_USER_AGENT,
         dns = d.dns?.takeIf { it.isNotBlank() } ?: "1.1.1.1",
+        splitMode = d.splitMode ?: AppData.SPLIT_ALL,
+        splitApps = d.splitApps ?: emptyList(),
+        autoApps = d.autoApps ?: emptyList(),
     )
 
     @Synchronized
@@ -63,6 +68,19 @@ object Store {
 
     fun selectedServer(): Server? =
         findServer(data.value.selectedServerId) ?: allServers().firstOrNull()
+
+    /**
+     * Pings every server (except [exclude]) and returns the fastest working one,
+     * also saving the measured pings. Returns null when nothing answers.
+     */
+    suspend fun findFastest(context: Context, exclude: String? = null): Server? = kotlinx.coroutines.coroutineScope {
+        val candidates = allServers().filter { it.id != exclude && it.config.isNotBlank() }
+        val results = candidates.map { s ->
+            async { s to com.nectar.vpn.core.XrayCore.ping(context, s.config) }
+        }.awaitAll()
+        results.forEach { (s, ms) -> setPing(s.id, ms) }
+        results.filter { it.second > 0 }.minByOrNull { it.second }?.first
+    }
 
     fun setPing(serverId: String, ping: Long) = edit { d ->
         d.copy(subscriptions = d.subscriptions.map { s ->

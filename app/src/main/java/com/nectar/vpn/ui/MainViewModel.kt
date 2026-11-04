@@ -191,4 +191,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------ settings
 
     fun updateSettings(block: (AppData) -> AppData) = Store.edit(block)
+
+    /** Re-applies connection settings (DNS, split tunneling…) by reconnecting if VPN is on. */
+    fun applyConnectionSettings() {
+        if (VpnState.status.value.phase == Phase.CONNECTED) NectarVpnService.start(ctx)
+    }
+
+    fun setAutoVpn(enabled: Boolean) {
+        Store.edit { it.copy(autoVpn = enabled) }
+        val d = Store.data.value
+        if (enabled && d.autoApps.isNotEmpty()) NectarVpnService.standby(ctx)
+        else if (!enabled) NectarVpnService.standbyOff(ctx)
+    }
+
+    /** Called on app start: makes sure the auto-VPN watcher is running. */
+    fun ensureStandby() {
+        val d = Store.data.value
+        if (d.autoVpn && d.autoApps.isNotEmpty()) NectarVpnService.standby(ctx)
+    }
+
+    private val _searching = MutableStateFlow(false)
+    val searching = _searching.asStateFlow()
+
+    /** Pings all servers and selects (and connects to, if VPN is on) the fastest one. */
+    fun pickFastest() {
+        if (_searching.value) return
+        _searching.value = true
+        viewModelScope.launch {
+            try {
+                val best = Store.findFastest(ctx)
+                if (best == null) {
+                    say("Ни один сервер не ответил")
+                } else {
+                    select(best)
+                    say("Самый быстрый: ${com.nectar.vpn.ui.Format.cleanName(best.name)} — ${best.let { Store.findServer(it.id)?.ping }} мс")
+                }
+            } finally {
+                _searching.value = false
+            }
+        }
+    }
 }

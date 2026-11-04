@@ -12,6 +12,8 @@ data class VpnStatus(
     val serverName: String = "",
     val since: Long = 0,
     val error: String? = null,
+    /** Last automatic action, e.g. "Сервер не отвечал — переключено". */
+    val info: String? = null,
 )
 
 object VpnState {

@@ -103,13 +103,14 @@ import com.nectar.vpn.vpn.VpnStatus
 import kotlinx.coroutines.delay
 
 @Composable
-fun MainScreen(vm: MainViewModel, onConnect: () -> Unit) {
+fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Unit) -> Unit = { it() }) {
     val data by vm.data.collectAsState()
     val status by vm.vpn.collectAsState()
     val refreshing by vm.refreshing.collectAsState()
     val pinging by vm.pinging.collectAsState()
     val collapsed by vm.collapsed.collectAsState()
     val message by vm.message.collectAsState()
+    val searching by vm.searching.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -121,6 +122,9 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit) {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             vm.consumeMessage()
         }
+    }
+    LaunchedEffect(status.info) {
+        status.info?.takeIf { it != "Авто-VPN" }?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
     LaunchedEffect(status.error) {
         status.error?.let { Toast.makeText(context, "Ошибка: $it", Toast.LENGTH_LONG).show() }
@@ -192,6 +196,9 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit) {
                                 color = Mono.Muted, fontSize = 12.sp, letterSpacing = 3.sp,
                                 fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f),
                             )
+                            TextButton(onClick = { vm.pickFastest() }, enabled = !searching) {
+                                Text(if (searching) "Поиск…" else "Быстрый", color = Mono.White, fontSize = 13.sp)
+                            }
                             TextButton(onClick = { vm.pingAll() }) { Text("Пинг", color = Mono.White, fontSize = 13.sp) }
                             val allCollapsed = collapsed.containsAll(data.subscriptions.map { it.id })
                             TextButton(onClick = { vm.collapseAll() }) {
@@ -269,6 +276,9 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit) {
                 onBack = { showSettings = false },
                 onChange = { vm.updateSettings(it) },
                 onRefreshAll = { vm.refreshAll() },
+                onPickFastest = { vm.pickFastest() },
+                onAutoVpn = { v -> if (v) onPrepareVpn { vm.setAutoVpn(true) } else vm.setAutoVpn(false) },
+                onConnectionSettingsChanged = { vm.applyConnectionSettings() },
             )
         }
     }
