@@ -1,7 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/open/(.*)", "destination": "/open.html" }
+    { "source": "/open/(.*)", "destination": "/open" }
   ],
   "headers": [
     { "source": "/api/config", "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }] }
