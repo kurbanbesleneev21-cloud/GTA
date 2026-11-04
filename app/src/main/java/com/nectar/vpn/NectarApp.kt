@@ -7,5 +7,6 @@ class NectarApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Store.init(this)
+        com.nectar.vpn.data.RemoteConfig.init(this)
     }
 }

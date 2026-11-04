@@ -111,6 +111,7 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
     val collapsed by vm.collapsed.collectAsState()
     val message by vm.message.collectAsState()
     val searching by vm.searching.collectAsState()
+    val remote by vm.remote.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -130,9 +131,9 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
         status.error?.let { Toast.makeText(context, "Ошибка: $it", Toast.LENGTH_LONG).show() }
     }
 
-    val selected = data.subscriptions.flatMap { it.servers }.let { all ->
+    val selected = remote.arrange(data.subscriptions.flatMap { it.servers }).let { all ->
         all.firstOrNull { it.id == data.selectedServerId } ?: all.firstOrNull()
-    }
+    }?.let { it.copy(name = remote.displayName(it.name)) }
     val connected = status.phase == Phase.CONNECTED
 
     Box(
@@ -149,7 +150,12 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
             contentPadding = PaddingValues(bottom = 48.dp),
         ) {
             item(key = "top") {
-                Appear(0) { TopBar(onAdd = { showAdd = true }, onSettings = { showSettings = true }) }
+                Appear(0) {
+                    TopBar(
+                        onAdd = if (remote.featAddManual) ({ showAdd = true }) else null,
+                        onSettings = { showSettings = true },
+                    )
+                }
             }
             item(key = "hero") {
                 Hero(
@@ -166,19 +172,56 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
             }
             item(key = "current") { Appear(2) { CurrentServer(selected, status, data.monoFlags) } }
 
+            if (remote.maintenance) {
+                item(key = "maint") {
+                    Appear(2) {
+                        NoticeCard(
+                            title = "Технические работы",
+                            text = remote.maintenanceText.ifBlank { "Скоро всё заработает" },
+                            inverted = true,
+                        )
+                    }
+                }
+            }
+            if (remote.announcementOn && (remote.announcementText.isNotBlank() || remote.announcementTitle.isNotBlank())) {
+                item(key = "ann") {
+                    Appear(3) {
+                        NoticeCard(
+                            title = remote.announcementTitle,
+                            text = remote.announcementText,
+                            button = remote.announcementButton.ifBlank { "Подробнее" }.takeIf { remote.announcementUrl.isNotBlank() },
+                            onButton = { openUrl(context, remote.announcementUrl) },
+                        )
+                    }
+                }
+            }
+            if (remote.buttons.isNotEmpty() || remote.support.isNotBlank() || remote.channel.isNotBlank()) {
+                item(key = "btns") {
+                    Appear(3) {
+                        LinkButtons(
+                            buttons = remote.buttons +
+                                listOfNotNull(
+                                    remote.channel.takeIf { it.isNotBlank() }?.let { "Канал" to it },
+                                    remote.support.takeIf { it.isNotBlank() }?.let { "Поддержка" to it },
+                                ),
+                        ) { openUrl(context, it) }
+                    }
+                }
+            }
+
             if (data.subscriptions.none { !it.isManual }) {
                 item(key = "empty") {
                     Appear(3) {
                         GetSubscriptionCard(
                             hasServers = data.subscriptions.isNotEmpty(),
-                            onGet = { openUrl(context, Links.BOT) },
+                            onGet = { openUrl(context, remote.bot) },
                             onHaveLink = { showAdd = true },
                         )
                     }
                 }
             } else {
                 item(key = "bot") {
-                    Appear(3) { BotStrip(data.subscriptions) { openUrl(context, Links.BOT) } }
+                    Appear(3) { BotStrip(data.subscriptions) { openUrl(context, remote.bot) } }
                 }
             }
 
@@ -230,9 +273,11 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
                     }
                 }
                 if (!isCollapsed) {
-                    val servers = if (data.sortByPing) sub.servers.sortedWith(
-                        compareBy<Server> { if (it.ping > 0) 0 else if (it.ping == 0L) 1 else 2 }.thenBy { it.ping }
-                    ) else sub.servers
+                    val visible = remote.arrange(sub.servers).map { it.copy(name = remote.displayName(it.name)) }
+                    val servers = if (data.sortByPing) visible.sortedWith(
+                        compareBy<Server> { if (remote.isPinned(it.name)) 0 else 1 }
+                            .thenBy { if (it.ping > 0) 0 else if (it.ping == 0L) 1 else 2 }.thenBy { it.ping }
+                    ) else visible
                     itemsIndexed(servers, key = { _, s -> "s-${s.id}" }) { index, server ->
                         Box(Modifier.animateItem()) {
                             Appear(index + 1) {
@@ -279,15 +324,61 @@ fun MainScreen(vm: MainViewModel, onConnect: () -> Unit, onPrepareVpn: (() -> Un
                 onPickFastest = { vm.pickFastest() },
                 onAutoVpn = { v -> if (v) onPrepareVpn { vm.setAutoVpn(true) } else vm.setAutoVpn(false) },
                 onConnectionSettingsChanged = { vm.applyConnectionSettings() },
+                remote = remote,
             )
         }
+    }
+
+    // update offered / required from the admin panel
+    val versionCode = com.nectar.vpn.BuildConfig.VERSION_CODE
+    val mustUpdate = remote.minVersion > versionCode
+    val canUpdate = remote.latestVersion > versionCode && remote.latestVersion > data.dismissedUpdate
+    if ((mustUpdate || canUpdate) && remote.updateUrl.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { if (!mustUpdate) vm.dismissUpdate(remote.latestVersion) },
+            containerColor = Mono.Raised,
+            shape = RoundedCornerShape(24.dp),
+            title = { Text(if (mustUpdate) "Нужно обновление" else "Доступно обновление", color = Mono.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    remote.updateText.ifBlank { if (mustUpdate) "Эта версия больше не поддерживается. Установите новую." else "Вышла новая версия Nectar VPN." },
+                    color = Mono.Soft,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { openUrl(context, remote.updateUrl) }) { Text("Скачать", color = Mono.White, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                if (!mustUpdate) TextButton(onClick = { vm.dismissUpdate(remote.latestVersion) }) { Text("Позже", color = Mono.Soft) }
+            },
+        )
+    } else if (remote.popupId.isNotBlank() && remote.popupId != data.seenPopupId && remote.popupText.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { vm.markPopupSeen(remote.popupId) },
+            containerColor = Mono.Raised,
+            shape = RoundedCornerShape(24.dp),
+            title = { Text(remote.popupTitle.ifBlank { "Nectar VPN" }, color = Mono.White, fontWeight = FontWeight.Bold) },
+            text = { Text(remote.popupText, color = Mono.Soft) },
+            confirmButton = {
+                if (remote.popupUrl.isNotBlank()) {
+                    TextButton(onClick = { vm.markPopupSeen(remote.popupId); openUrl(context, remote.popupUrl) }) {
+                        Text(remote.popupButton.ifBlank { "Открыть" }, color = Mono.White, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    TextButton(onClick = { vm.markPopupSeen(remote.popupId) }) { Text("Понятно", color = Mono.White, fontWeight = FontWeight.Bold) }
+                }
+            },
+            dismissButton = {
+                if (remote.popupUrl.isNotBlank()) TextButton(onClick = { vm.markPopupSeen(remote.popupId) }) { Text("Закрыть", color = Mono.Soft) }
+            },
+        )
     }
 
     if (showAdd) {
         AddDialog(
             onDismiss = { showAdd = false },
             onAdd = { vm.addInput(it); showAdd = false },
-            onGet = { openUrl(context, Links.BOT) },
+            onGet = { openUrl(context, remote.bot) },
         )
     }
 }
@@ -301,7 +392,7 @@ private fun copy(context: Context, text: String) {
 // ---------------------------------------------------------------- top bar
 
 @Composable
-private fun TopBar(onAdd: () -> Unit, onSettings: () -> Unit) {
+private fun TopBar(onAdd: (() -> Unit)?, onSettings: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -312,7 +403,7 @@ private fun TopBar(onAdd: () -> Unit, onSettings: () -> Unit) {
             Text("NECTAR", color = Mono.White, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 8.sp)
             Text("V P N", color = Mono.Muted, fontSize = 10.sp, letterSpacing = 4.sp)
         }
-        CircleIconButton(onAdd) { Icon(Icons.Default.Add, "Добавить", tint = Mono.White, modifier = Modifier.size(22.dp)) }
+        if (onAdd != null) CircleIconButton(onAdd) { Icon(Icons.Default.Add, "Добавить", tint = Mono.White, modifier = Modifier.size(22.dp)) }
         CircleIconButton(onSettings) { Icon(Icons.Default.Settings, "Настройки", tint = Mono.White, modifier = Modifier.size(22.dp)) }
     }
 }
@@ -834,4 +925,51 @@ private fun AddDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit, onGet: () 
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена", color = Mono.Soft) } },
     )
+}
+
+// ---------------------------------------------------------------- admin-controlled blocks
+
+@Composable
+private fun NoticeCard(
+    title: String,
+    text: String,
+    inverted: Boolean = false,
+    button: String? = null,
+    onButton: () -> Unit = {},
+) {
+    val bg = if (inverted) Mono.White else Mono.Surface
+    val fg = if (inverted) Mono.Black else Mono.White
+    Column(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .border(1.dp, if (inverted) Mono.White else Mono.Line, RoundedCornerShape(20.dp))
+            .padding(16.dp),
+    ) {
+        if (title.isNotBlank()) Text(title, color = fg, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        if (text.isNotBlank()) {
+            if (title.isNotBlank()) Spacer(Modifier.height(4.dp))
+            Text(text, color = if (inverted) Mono.Black.copy(alpha = 0.75f) else Mono.Soft, fontSize = 13.sp)
+        }
+        if (button != null) {
+            Spacer(Modifier.height(12.dp))
+            ShineButton(button, onButton, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun LinkButtons(buttons: List<Pair<String, String>>, onOpen: (String) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth(),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        buttons.forEach { (title, url) -> GhostButton(title, { onOpen(url) }) }
+    }
 }

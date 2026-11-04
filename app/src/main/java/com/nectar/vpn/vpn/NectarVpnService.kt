@@ -121,6 +121,17 @@ class NectarVpnService : VpnService() {
     // ================================================================== connect
 
     private suspend fun connect(target: Server? = null, reason: String? = null) = lock.withLock {
+        val remote = com.nectar.vpn.data.RemoteConfig.current
+        if (remote.maintenance) {
+            VpnState.set(VpnStatus(Phase.STOPPED, error = remote.maintenanceText.ifBlank { "Ведутся технические работы" }))
+            stayOrStop()
+            return@withLock
+        }
+        if (remote.minVersion > com.nectar.vpn.BuildConfig.VERSION_CODE) {
+            VpnState.set(VpnStatus(Phase.STOPPED, error = "Обновите приложение"))
+            stayOrStop()
+            return@withLock
+        }
         val server = target ?: Store.selectedServer()
         if (server == null) {
             VpnState.set(VpnStatus(Phase.STOPPED, error = "Добавьте подписку или ключ"))
@@ -236,7 +247,7 @@ class NectarVpnService : VpnService() {
             var fails = 0
             var restarts = 0
             while (isActive) {
-                val ok = runCatching { XrayCore.controller.measureDelay(XrayCore.TEST_URL) > 0 }.getOrDefault(false)
+                val ok = runCatching { XrayCore.controller.measureDelay(XrayCore.testUrl) > 0 }.getOrDefault(false)
                 if (ok) {
                     fails = 0; restarts = 0
                 } else {

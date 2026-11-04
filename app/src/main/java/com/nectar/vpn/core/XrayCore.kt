@@ -15,7 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Thin wrapper around the Xray-core Android library (libv2ray.aar). */
 object XrayCore {
     private const val TAG = "NectarCore"
-    const val TEST_URL = "https://www.gstatic.com/generate_204"
+    const val DEFAULT_TEST_URL = "https://www.gstatic.com/generate_204"
+    /** Can be changed from the admin panel. */
+    @Volatile var testUrl: String = DEFAULT_TEST_URL
 
     private val initialized = AtomicBoolean(false)
     private val pingLimiter = Semaphore(6)
@@ -52,7 +54,7 @@ object XrayCore {
         init(context)
         pingLimiter.withPermit {
             try {
-                Libv2ray.measureOutboundDelay(XrayConfig.forTest(config), TEST_URL).let { if (it <= 0) -1L else it }
+                Libv2ray.measureOutboundDelay(XrayConfig.forTest(config), testUrl).let { if (it <= 0) -1L else it }
             } catch (e: Throwable) {
                 Log.w(TAG, "ping failed: ${e.message}")
                 -1L

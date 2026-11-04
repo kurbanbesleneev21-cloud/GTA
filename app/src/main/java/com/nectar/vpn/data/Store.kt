@@ -50,6 +50,7 @@ object Store {
         splitMode = d.splitMode ?: AppData.SPLIT_ALL,
         splitApps = d.splitApps ?: emptyList(),
         autoApps = d.autoApps ?: emptyList(),
+        seenPopupId = d.seenPopupId ?: "",
     )
 
     @Synchronized
@@ -62,7 +63,9 @@ object Store {
         }
     }
 
+    /** All servers the user may use (servers hidden from the admin panel are excluded). */
     fun allServers(): List<Server> = data.value.subscriptions.flatMap { it.servers }
+        .filter { !RemoteConfig.current.isHidden(it.name) }
 
     fun findServer(id: String?): Server? = id?.let { sid -> allServers().firstOrNull { it.id == sid } }
 

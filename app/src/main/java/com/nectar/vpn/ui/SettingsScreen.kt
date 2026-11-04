@@ -69,6 +69,7 @@ fun SettingsScreen(
     onPickFastest: () -> Unit = {},
     onAutoVpn: (Boolean) -> Unit = {},
     onConnectionSettingsChanged: () -> Unit = {},
+    remote: com.nectar.vpn.data.Remote = com.nectar.vpn.data.Remote(),
 ) {
     val context = LocalContext.current
     BackHandler(onBack = onBack)
@@ -128,7 +129,7 @@ fun SettingsScreen(
                         Spacer(Modifier.height(14.dp))
                         ShineButton(
                             "Получить подписку",
-                            onClick = { openUrl(context, Links.BOT) },
+                            onClick = { openUrl(context, remote.bot) },
                             modifier = Modifier.fillMaxWidth(),
                             leading = { PlaneGlyph() },
                         )
@@ -178,10 +179,11 @@ fun SettingsScreen(
                 }
             }
 
-            item { Section("ПРИЛОЖЕНИЯ", 5) }
-            item {
+            if (remote.featSplit || remote.featAutoVpn) item { Section("ПРИЛОЖЕНИЯ", 5) }
+            if (remote.featSplit || remote.featAutoVpn) item {
                 Appear(6) {
                     Group {
+                      if (remote.featSplit) {
                         Text(
                             "Раздельное туннелирование",
                             color = Mono.White, fontSize = 15.sp,
@@ -195,6 +197,8 @@ fun SettingsScreen(
                         }
                         Spacer(Modifier.height(6.dp))
                         Divider()
+                      }
+                      if (remote.featAutoVpn) {
                         ToggleRow(
                             "Авто-VPN по приложениям",
                             "VPN включится при входе в выбранное приложение и выключится при выходе",
@@ -211,6 +215,7 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                      }
                     }
                 }
             }
@@ -224,6 +229,7 @@ fun SettingsScreen(
                         ToggleRow("Пинг после обновления", "Сразу проверять все серверы", data.pingAfterUpdate) { v -> onChange { it.copy(pingAfterUpdate = v) } }
                         Divider()
                         Column(Modifier.padding(16.dp)) {
+                          if (remote.featUserAgent) {
                             OutlinedTextField(
                                 value = ua,
                                 onValueChange = { ua = it },
@@ -237,6 +243,7 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             Spacer(Modifier.height(12.dp))
+                          }
                             GhostButton("Обновить все подписки", { saveUa(); onRefreshAll() }, Modifier.fillMaxWidth())
                         }
                     }
@@ -260,7 +267,9 @@ fun SettingsScreen(
             item {
                 Appear(8) {
                     Group {
-                        LinkRow("Telegram-бот", "@NECTARVPN_xbot") { openUrl(context, Links.BOT) }
+                        LinkRow("Telegram-бот", remote.bot.removePrefix("https://t.me/").let { "@$it" }) { openUrl(context, remote.bot) }
+                        if (remote.support.isNotBlank()) { Divider(); LinkRow("Поддержка", remote.support) { openUrl(context, remote.support) } }
+                        if (remote.iphone.isNotBlank()) { Divider(); LinkRow("Nectar VPN на iPhone", "Инструкция") { openUrl(context, remote.iphone) } }
                         Divider()
                         InfoRow("Версия", BuildConfig.VERSION_NAME)
                         Divider()

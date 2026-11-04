@@ -26,7 +26,8 @@ object SubscriptionFetcher {
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "nectar-android"
 
     /** Downloads and parses a subscription, returning an updated [Subscription]. */
-    fun fetch(context: Context, base: Subscription, userAgent: String): Subscription {
+    fun fetch(context: Context, base: Subscription, userAgentSetting: String): Subscription {
+        val userAgent = RemoteConfig.current.userAgent.ifBlank { userAgentSetting }
         val request = Request.Builder()
             .url(base.url.trim())
             .header("User-Agent", userAgent)

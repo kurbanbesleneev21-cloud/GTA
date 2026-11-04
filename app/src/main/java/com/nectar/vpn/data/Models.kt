@@ -68,6 +68,12 @@ data class AppData(
     val autoSwitch: Boolean = true,
     /** Restart the core when the network changes (Wi-Fi <-> mobile). */
     val reconnectOnNetworkChange: Boolean = true,
+
+    // --- remote control (admin panel) -------------------------------------
+    val remoteDefaultsApplied: Boolean = false,
+    val remoteDefaultsAt: Long = 0,
+    val seenPopupId: String = "",
+    val dismissedUpdate: Int = 0,
 ) {
     companion object {
         /** Panels (Remnawave, Marzban…) return full Xray-JSON configs for this client signature. */

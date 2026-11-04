@@ -38,12 +38,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val ctx get() = getApplication<Application>()
 
+    val remote = com.nectar.vpn.data.RemoteConfig.remote
+
+    init {
+        // admin panel config: on start and every 15 minutes while the app is open
+        viewModelScope.launch {
+            while (true) {
+                com.nectar.vpn.data.RemoteConfig.refresh(ctx)
+                kotlinx.coroutines.delay(15 * 60_000L)
+            }
+        }
+    }
+
+    fun markPopupSeen(id: String) = Store.edit { it.copy(seenPopupId = id) }
+    fun dismissUpdate(version: Int) = Store.edit { it.copy(dismissedUpdate = version) }
+
     fun consumeMessage() { _message.value = null }
     private fun say(msg: String) { _message.value = msg }
 
     // ------------------------------------------------------------ connection
 
-    fun connect() = NectarVpnService.start(ctx)
+    fun connect() {
+        val r = com.nectar.vpn.data.RemoteConfig.current
+        if (r.maintenance) {
+            say(r.maintenanceText.ifBlank { "Ведутся технические работы" }); return
+        }
+        NectarVpnService.start(ctx)
+    }
     fun disconnect() = NectarVpnService.stop(ctx)
 
     fun select(server: Server) {
