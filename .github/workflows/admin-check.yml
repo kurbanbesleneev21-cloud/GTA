@@ -1,0 +1,23 @@
+name: Admin panel check
+
+on:
+  push:
+    paths: ['admin/**', '.github/workflows/admin-check.yml']
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Nectar Control endpoints
+        run: |
+          B=https://nectar-vpn-control.vercel.app
+          sleep 60   # give Vercel time to deploy
+          for p in / /admin /open/https%3A%2F%2Fexample.com /api/config /api/telegram; do
+            echo "$p -> $(curl -s -o /dev/null -w '%{http_code}' $B$p)"
+          done
+          echo "--- config:"; curl -s $B/api/config | head -c 600; echo
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'x-admin-password: wrong' $B/api/admin)
+          echo "admin with wrong password -> $code"
+          test "$(curl -s -o /dev/null -w '%{http_code}' $B/api/config)" = "200"
+          test "$code" = "401"
